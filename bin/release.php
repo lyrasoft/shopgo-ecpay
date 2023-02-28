@@ -37,8 +37,6 @@ HELP;
      */
     protected function doExecute()
     {
-        $this->compileAssets();
-
         $currentVersion = trim(file_get_contents(__DIR__ . '/../VERSION'));
         $targetVersion = $this->getArgument(0);
 
