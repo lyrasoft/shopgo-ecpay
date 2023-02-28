@@ -1,0 +1,21 @@
+{
+    "name": "lyrasoft/shopgo-ecpay",
+    "description": "ShopGo Ecpay package",
+    "type": "shopgo-package",
+    "require": {
+        "ecpay/sdk": "^1.2"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Lyrasoft\\ShopGo\\Ecpay\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Simon Asika",
+            "email": "asika32764@gmail.com"
+        }
+    ],
+    "minimum-stability": "beta"
+}
