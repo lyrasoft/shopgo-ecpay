@@ -64,13 +64,19 @@ class EcpayShipping extends AbstractShipping
 
     public function define(Form $form): void
     {
-        $this->registerPricingForm($form);
-
         $form->ns('params', function (Form $form) {
             $form->fieldset('shipping')
                 ->title('物流參數')
                 ->register(
                     function (Form $form) {
+                        $form->add('gateway', ListField::class)
+                            ->label('貨運方式')
+                            ->option('黑貓', 'TCAT')
+                            ->option('宅配通', 'ECAN')
+                            ->option('全家超商', 'FAMI')
+                            ->option('統一超商', 'UNIMART')
+                            ->option('萊爾富超商', 'HILIFE');
+
                         $form->add('merchant_id', TextField::class)
                             ->label('MerchantID')
                             ->placeholder($this->getEnvCredentials()[0]);
@@ -82,14 +88,6 @@ class EcpayShipping extends AbstractShipping
                         $form->add('hash_iv', TextField::class)
                             ->label('HashIV')
                             ->placeholder($this->getEnvCredentials()[2]);
-
-                        $form->add('gateway', ListField::class)
-                            ->label('貨運方式')
-                            ->option('黑貓', 'TCAT')
-                            ->option('宅配通', 'ECAN')
-                            ->option('全家超商', 'FAMI')
-                            ->option('統一超商', 'UNIMART')
-                            ->option('萊爾富超商', 'HILIFE');
 
                         $form->add('hr1', SpacerField::class)
                             ->hr(true);
@@ -168,6 +166,8 @@ class EcpayShipping extends AbstractShipping
                     }
                 );
         });
+
+        $this->registerPricingForm($form);
     }
 
     public function isSupported(CartData $cartData): bool

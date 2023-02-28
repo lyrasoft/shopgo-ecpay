@@ -29,17 +29,17 @@ trait EcpayTrait
 
     public function getMerchantID(): string
     {
-        return $this->getParams()['merchant_id'] ?: $this->getEnvCredentials()[0];
+        return $this->getParams()['merchant_id'] ?? '' ?: $this->getEnvCredentials()[0];
     }
 
     public function getHashKey(): string
     {
-        return $this->getParams()['hash_key'] ?: $this->getEnvCredentials()[1];
+        return $this->getParams()['hash_key'] ?? '' ?:  $this->getEnvCredentials()[1];
     }
 
     public function getHashIV(): string
     {
-        return $this->getParams()['hash_iv'] ?: $this->getEnvCredentials()[2];
+        return $this->getParams()['hash_iv'] ?? '' ?:  $this->getEnvCredentials()[2];
     }
 
     public function getEcpay(): Factory

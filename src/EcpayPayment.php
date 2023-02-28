@@ -127,7 +127,6 @@ class EcpayPayment extends AbstractPayment
     public function processCheckout(Order $order, RouteUri $completeUrl): string
     {
         $params = $this->getParams();
-        $paymentParams = $params['payment'] ?? [];
 
         $nav = $this->app->service(Navigator::class);
         $chronos = $this->app->service(ChronosService::class);
@@ -154,21 +153,29 @@ class EcpayPayment extends AbstractPayment
             'ItemName' => implode("#", $desc),
             'ReturnURL' => (string) $notify->task('receivePaid'),
             'ClientBackURL' => (string) $notify->task('return'),
-            'ChoosePayment' => $paymentParams['gateway'],
+            'ChoosePayment' => $params['gateway'],
             'EncryptType' => 1,
 
             'ExpireDate' => 7,
             'PaymentInfoURL' => (string) $notify->task('paymentInfo'),
         ];
 
-        if ($paymentParams['gateway'] === 'Credit') {
-            if ($paymentParams['installment']) {
-                $input['CreditInstallment'] = implode(',', (array) $paymentParams['installment']);
+        if ($params['gateway'] === 'Credit') {
+            if ($params['installment']) {
+                $input['CreditInstallment'] = implode(',', (array) $params['installment']);
             }
         }
 
         $factory = $this->getEcpay();
         $autoSubmitFormService = $factory->create('AutoSubmitFormWithCmvService');
+
+        $orm = $this->app->service(ORM::class);
+
+        $orm->updateBatch(
+            Order::class,
+            ['payment_args' => json_encode($input)],
+            ['id' => $order->getId()]
+        );
 
         return $autoSubmitFormService->generate(
             $input,
