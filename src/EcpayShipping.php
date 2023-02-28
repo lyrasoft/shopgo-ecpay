@@ -12,7 +12,6 @@ declare(strict_types=1);
 namespace Lyrasoft\ShopGo\Ecpay;
 
 use Lyrasoft\ShopGo\Cart\CartData;
-use Lyrasoft\ShopGo\Ecpay\EcpayTrait;
 use Lyrasoft\ShopGo\Entity\Location;
 use Lyrasoft\ShopGo\Entity\Order;
 use Lyrasoft\ShopGo\Field\OrderStateListField;
@@ -200,7 +199,7 @@ class EcpayShipping extends AbstractShipping
         /** @var CompositeRenderer $renderer */
         $renderer = $this->app->service(RendererService::class)->createRenderer();
         $renderer->addPath(WINDWALKER_VIEWS . '/shipping/ecpay');
-        $renderer->addPath(__DIR__ . '/views');
+        $renderer->addPath(__DIR__ . '/../views');
 
         return $renderer->render(
             'form',

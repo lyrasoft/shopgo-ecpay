@@ -11,8 +11,8 @@ composer require lyrasoft/shopgo-ecpay
 Register to shopgo config:
 
 ```php
-use Lyrasoft\ShopGo\Ecpay\Payment\EcpayPayment;
-use Lyrasoft\ShopGo\Ecpay\Shipping\EcpayShipping;
+use Lyrasoft\ShopGo\Ecpay\EcpayPayment;
+use Lyrasoft\ShopGo\Ecpay\EcpayShipping;
 
 return [
     //...
