@@ -174,7 +174,7 @@ class EcpayShipping extends AbstractShipping
     {
         $params = $this->getParams();
 
-        if (static::isCVS($params['gateway'])) {
+        if (static::isCVS($params['gateway'] ?? '')) {
             $maxAmount = $params['cvs_max_amount'] ?? 19999;
             $minAmount = $params['cvs_min_amount'] ?? 0;
 
@@ -209,21 +209,20 @@ class EcpayShipping extends AbstractShipping
         );
     }
 
-    public function prepareOrder(Order $order, CartData $cartData): Order
+    public function prepareOrder(Order $order, CartData $cartData, array $checkoutData = []): Order
     {
         $appRequest = $this->app->service(AppRequest::class);
-        $checkout = $appRequest->input('checkout');
-        $shipping = $checkout['shipping'];
+        $shipping = $checkoutData['shipping'] ?? [];
 
-        if ($this->isCVSType()) {
+        if ($this->isCVSType() && $shipping) {
             $data = $order->getShippingData();
 
-            $data['CVSAddress'] = $shipping['CVSAddress'];
-            $data['CVSOutSide'] = $shipping['CVSOutSide'];
-            $data['CVSStoreID'] = $shipping['CVSStoreID'];
-            $data['CVSStoreName'] = $shipping['CVSStoreName'];
-            $data['CVSTelephone'] = $shipping['CVSTelephone'];
-            $data['LogisticsSubType'] = $shipping['LogisticsSubType'];
+            $data['CVSAddress'] = $shipping['CVSAddress'] ?? '';
+            $data['CVSOutSide'] = $shipping['CVSOutSide'] ?? '';
+            $data['CVSStoreID'] = $shipping['CVSStoreID'] ?? '';
+            $data['CVSStoreName'] = $shipping['CVSStoreName'] ?? '';
+            $data['CVSTelephone'] = $shipping['CVSTelephone'] ?? '';
+            $data['LogisticsSubType'] = $shipping['LogisticsSubType'] ?? '';
         }
 
         return $order;
@@ -299,7 +298,7 @@ HTML;
     public function getSubtype()
     {
         $params = $this->getParams();
-        $gateway = $params['gateway'];
+        $gateway = $params['gateway'] ?? '';
 
         if ($params['cvs_type'] === 'C2C') {
             return $gateway . 'C2C';
@@ -312,7 +311,7 @@ HTML;
     {
         $params = $this->getParams();
 
-        $type = $params['gateway'];
+        $type = $params['gateway'] ?? '';
 
         return static::isCVS($type);
     }
