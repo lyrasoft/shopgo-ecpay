@@ -190,7 +190,7 @@ class EcpayShipping extends AbstractShipping
     {
         $params = $this->getParams();
 
-        $type = $params['gateway'];
+        $type = $params['gateway'] ?? '';
 
         if (!static::isCVS($type)) {
             return '';
