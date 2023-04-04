@@ -58,12 +58,12 @@ $id = 'shipping-form-' . $uid;
 
 <script>
   window.mapSelect = function (button) {
-      window.open(button.dataset.url, '', `width=900, height=600, top=300, left=300`);
+    window.open(button.dataset.url, '', `width=900, height=600, top=300, left=300`);
 
-      window.{{ $callbackName }} = function (data) {
-          const wrapper = document.querySelector('#{{$id}} .l-shipping-form__info');
+    window.{{ $callbackName }} = function (data) {
+      const wrapper = document.querySelector('#{{$id}} .l-shipping-form__info');
 
-          const html = `
+      const html = `
     <div class="d-flex gap-2 align-items-center">
         <h6 class="m-0">${data.CVSStoreName}</h6>
         <p class="text-muted m-0">${data.CVSAddress}</p>
@@ -77,9 +77,7 @@ $id = 'shipping-form-' . $uid;
     </div>
     `;
 
-          wrapper.innerHTML = html;
-      };
+      wrapper.innerHTML = html;
+    };
   }
 </script>
-
-

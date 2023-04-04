@@ -22,9 +22,11 @@ use Lyrasoft\ShopGo\Enum\OrderHistoryType;
 use Lyrasoft\ShopGo\Field\OrderStateListField;
 use Lyrasoft\ShopGo\Payment\AbstractPayment;
 use Lyrasoft\ShopGo\Service\OrderService;
+use Lyrasoft\ShopGo\Traits\LayoutAwareTrait;
 use Windwalker\Core\Application\AppContext;
 use Windwalker\Core\DateTime\ChronosService;
 use Windwalker\Core\Language\LangService;
+use Windwalker\Core\Language\TranslatorTrait;
 use Windwalker\Core\Router\Navigator;
 use Windwalker\Core\Router\RouteUri;
 use Windwalker\DI\Attributes\Inject;
@@ -40,10 +42,11 @@ use Windwalker\ORM\ORM;
  */
 class EcpayPayment extends AbstractPayment
 {
+    use TranslatorTrait;
+    use LayoutAwareTrait;
     use EcpayTrait;
 
-    #[Inject]
-    protected AppContext $app;
+    protected static string $type = '';
 
     public static function getTypeIcon(): string
     {
@@ -111,12 +114,42 @@ class EcpayPayment extends AbstractPayment
                     }
                 );
         });
+
+        $form->ns(
+            'params',
+            fn (Form $form) => $form->fieldset('layout')
+                ->title($this->trans('shopgo.payment.fieldset.layout'))
+                ->register(
+                    function (Form $form) {
+                        $form->add('checkout_form_layout', TextField::class)
+                            ->label($this->trans('shopgo.payment.field.checkout.form.layout'))
+                            ->defaultValue('ecpay-payment-form');
+                    }
+                )
+        );
     }
+
+    protected function getBasePath(): string
+    {
+        return __DIR__ . '/../views';
+    }
+
 
     public function form(Location $location): string
     {
         // Todo: make installment choose layout
-        return '';
+        $layout = $this->getParams()['checkout_form_layout'] ?? null ?: 'ecpay-payment-form';
+
+        if (!$layout) {
+            return '';
+        }
+
+        return $this->renderLayout(
+            $layout,
+            [
+                'payment' => $this,
+            ]
+        );
     }
 
     public function prepareOrder(Order $order, CartData $cartData, array $checkoutData = []): Order
@@ -166,7 +199,7 @@ class EcpayPayment extends AbstractPayment
             }
         }
 
-        $factory = $this->getEcpay();
+        $factory = $this->getEcpayFactory();
         $autoSubmitFormService = $factory->create('AutoSubmitFormWithCmvService');
 
         $orm = $this->app->service(ORM::class);
@@ -197,7 +230,7 @@ class EcpayPayment extends AbstractPayment
 
     public function receivePaid(AppContext $app): string
     {
-        $factory = $this->getEcpay();
+        $factory = $this->getEcpayFactory();
         /** @var VerifiedArrayResponse $checkoutResponse */
         $checkoutResponse = $factory->create(VerifiedArrayResponse::class);
 

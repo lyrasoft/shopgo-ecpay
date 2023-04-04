@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Lyrasoft\ShopGo\Ecpay;
 
 use Ecpay\Sdk\Factories\Factory;
+use Ecpay\Sdk\Services\CheckMacValueService;
 
 /**
  * Trait EcpayTrait
@@ -42,14 +43,13 @@ trait EcpayTrait
         return $this->getParams()['hash_iv'] ?? '' ?:  $this->getEnvCredentials()[2];
     }
 
-    public function getEcpay(): Factory
+    public function getEcpayFactory(string $hashMethod = CheckMacValueService::METHOD_SHA256): Factory
     {
-        $params = $this->getParams();
-
         return new Factory(
             [
                 'hashKey' => $this->getHashKey(),
                 'hashIv' => $this->getHashIV(),
+                'hashMethod' => $hashMethod,
             ]
         );
     }

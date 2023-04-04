@@ -11,30 +11,38 @@ declare(strict_types=1);
 
 namespace Lyrasoft\ShopGo\Ecpay;
 
+use Ecpay\Sdk\Services\CheckMacValueService;
 use Lyrasoft\ShopGo\Cart\CartData;
+use Lyrasoft\ShopGo\Data\ShippingHistory;
 use Lyrasoft\ShopGo\Entity\Location;
 use Lyrasoft\ShopGo\Entity\Order;
+use Lyrasoft\ShopGo\Enum\OrderHistoryType;
 use Lyrasoft\ShopGo\Field\OrderStateListField;
+use Lyrasoft\ShopGo\Service\OrderService;
 use Lyrasoft\ShopGo\Shipping\AbstractShipping;
 use Lyrasoft\ShopGo\Shipping\PriceRangeTrait;
+use Lyrasoft\ShopGo\Traits\LayoutAwareTrait;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\UriInterface;
 use Unicorn\Field\ButtonRadioField;
 use Unicorn\Field\SwitcherField;
 use Windwalker\Core\Application\AppContext;
-use Windwalker\Core\Application\ApplicationInterface;
+use Windwalker\Core\DateTime\ChronosService;
+use Windwalker\Core\Form\Exception\ValidateFailException;
 use Windwalker\Core\Http\AppRequest;
 use Windwalker\Core\Language\LangService;
-use Windwalker\Core\Renderer\RendererService;
+use Windwalker\Core\Manager\Logger;
 use Windwalker\Core\Router\Navigator;
 use Windwalker\Core\Router\RouteUri;
-use Windwalker\DI\Attributes\Inject;
 use Windwalker\Form\Field\ListField;
 use Windwalker\Form\Field\NumberField;
 use Windwalker\Form\Field\SpacerField;
 use Windwalker\Form\Field\TextField;
 use Windwalker\Form\Form;
-use Windwalker\Renderer\CompositeRenderer;
+use Windwalker\Utilities\Cache\InstanceCacheTrait;
+use Windwalker\Utilities\Str;
+
+use function Windwalker\collect;
 
 /**
  * The EcpayShipping class.
@@ -42,10 +50,11 @@ use Windwalker\Renderer\CompositeRenderer;
 class EcpayShipping extends AbstractShipping
 {
     use PriceRangeTrait;
+    use LayoutAwareTrait;
     use EcpayTrait;
+    use InstanceCacheTrait;
 
-    #[Inject]
-    protected ApplicationInterface $app;
+    protected static string $type = '';
 
     public static function getTypeIcon(): string
     {
@@ -72,7 +81,7 @@ class EcpayShipping extends AbstractShipping
                         $form->add('gateway', ListField::class)
                             ->label('貨運方式')
                             ->option('黑貓', 'TCAT')
-                            ->option('宅配通', 'ECAN')
+                            ->option('中華郵政', 'POST')
                             ->option('全家超商', 'FAMI')
                             ->option('統一超商', 'UNIMART')
                             ->option('萊爾富超商', 'HILIFE');
@@ -91,6 +100,11 @@ class EcpayShipping extends AbstractShipping
 
                         $form->add('hr1', SpacerField::class)
                             ->hr(true);
+
+                        $form->add('goods_name', TextField::class)
+                            ->label('貨品名稱')
+                            ->required(true)
+                            ->defaultValue('測試商品');
 
                         $form->add('sender_name', TextField::class)
                             ->label('寄件人姓名')
@@ -132,6 +146,10 @@ class EcpayShipping extends AbstractShipping
                             ->label('已取貨狀態')
                             ->defaultValue(8);
 
+                        $form->add('unpick_state', OrderStateListField::class)
+                            ->label('未取貨狀態')
+                            ->defaultValue(16);
+
                         $form->add('hr2', SpacerField::class)
                             ->hr(true);
 
@@ -139,7 +157,7 @@ class EcpayShipping extends AbstractShipping
                             ->label('超商合作類型')
                             ->option('店到店 (C2C)', 'C2C')
                             ->option('大宗寄倉 (B2C)', 'B2C')
-                            ->defaultValue('C2C')
+                            ->defaultValue('B2C')
                             ->help('備註: 統一超商的店到店稱為【統一超商交貨便】');
 
                         $form->add('is_collection', SwitcherField::class)
@@ -168,6 +186,23 @@ class EcpayShipping extends AbstractShipping
         });
 
         $this->registerPricingForm($form);
+
+        $form->ns(
+            'params',
+            fn(Form $form) => $form->fieldset('layout')
+                ->title($this->trans('shopgo.shipping.fieldset.layout'))
+                ->register(
+                    function (Form $form) {
+                        $form->add('checkout_form_layout', TextField::class)
+                            ->label($this->trans('shopgo.shipping.field.checkout.form.layout'))
+                            ->defaultValue('ecpay-shipping-form');
+
+                        $form->add('orderinfo_layout', TextField::class)
+                            ->label($this->trans('shopgo.shipping.field.orderinfo.layout'))
+                            ->defaultValue('ecpay-shipping-orderinfo');
+                    }
+                )
+        );
     }
 
     public function isSupported(CartData $cartData): bool
@@ -186,23 +221,21 @@ class EcpayShipping extends AbstractShipping
         return true;
     }
 
+    protected function getBasePath(): string
+    {
+        return __DIR__ . '/../views';
+    }
+
     public function form(Location $location): string
     {
-        $params = $this->getParams();
+        $layout = $this->getParams()['checkout_form_layout'] ?? null ?: 'ecpay-shipping-form';
 
-        $type = $params['gateway'] ?? '';
-
-        if (!static::isCVS($type)) {
+        if (!$layout) {
             return '';
         }
 
-        /** @var CompositeRenderer $renderer */
-        $renderer = $this->app->service(RendererService::class)->createRenderer();
-        $renderer->addPath(WINDWALKER_VIEWS . '/shipping/ecpay');
-        $renderer->addPath(__DIR__ . '/../views');
-
-        return $renderer->render(
-            'form',
+        return $this->renderLayout(
+            $layout,
             [
                 'shipping' => $this,
             ]
@@ -235,7 +268,19 @@ class EcpayShipping extends AbstractShipping
 
     public function orderInfo(Order $order): string
     {
-        return '';
+        $layout = $this->getParams()['orderinfo_layout'] ?? null ?: 'ecpay-shipping-orderinfo';
+
+        if (!$layout) {
+            return '';
+        }
+
+        return $this->renderLayout(
+            $layout,
+            [
+                'shipping' => $this,
+                'order' => $order,
+            ]
+        );
     }
 
     public function runTask(AppContext $app, string $task): mixed
@@ -249,7 +294,7 @@ class EcpayShipping extends AbstractShipping
     public function mapSelect(AppContext $app, Navigator $nav): string
     {
         $params = $this->getParams();
-        $ecpay = $this->getEcpay();
+        $ecpay = $this->getEcpayFactory();
         $callback = $app->input('callback');
 
         $formService = $ecpay->create('AutoSubmitFormWithCmvService');
@@ -257,7 +302,7 @@ class EcpayShipping extends AbstractShipping
         $input = [
             'MerchantID' => $this->getMerchantID(),
             'LogisticsType' => 'CVS',
-            'LogisticsSubType' => $this->getSubtype(),
+            'LogisticsSubType' => $params['gateway'],
             'IsCollection' => $params['is_collection'] ? 'Y' : 'N',
 
             // 請參考 example/Logistics/Domestic/GetMapResponse.php 範例開發
@@ -288,11 +333,269 @@ window.close();
 HTML;
     }
 
+    public function createShippingBill(Order $order): void
+    {
+        if ($order->getShippingNo()) {
+            return;
+        }
+
+        $nav = $this->app->service(Navigator::class);
+
+        $factory = $this->getEcpayFactory(CheckMacValueService::METHOD_MD5);
+        $postService = $factory->create('PostWithCmvEncodedStrResponseService');
+        $chronosService = $this->app->service(ChronosService::class);
+
+        Logger::info('ecpay-shipping-create', "Create Ecpay shipping bill for: {$order->getNo()}");
+
+        $no = $order->getNo();
+
+        if ($this->isTest()) {
+            $no .= 'T' . OrderService::getCurrentTimeBase62();
+        }
+
+        $params = collect($this->getParams());
+        $gateway = $params['gateway'];
+        $shippingData = $order->getShippingData();
+
+        $name = $shippingData->getName();
+        $name = Str::substring($name, 0, 10);
+
+        // Shipping Info
+        $shippingInfo = $order->getShippingInfo();
+        $shippingInfo->setIsCod($this->isCod($order));
+        $shippingInfo->setTradeNo($no);
+        $shippingInfo->setTargetName($name);
+        $shippingInfo->setAmount((string) $order->getTotal());
+        $shippingInfo->setType($this->getSubtype());
+        // $shippingInfo->setTargetAddress($no);
+
+        $input = [
+            'MerchantID' => $this->getMerchantID(),
+            'MerchantTradeNo' => $no,
+            'MerchantTradeDate' => $chronosService->toLocalFormat('now', 'Y/m/d H:i:s'),
+            'LogisticsType' => static::isCVS($gateway) ? 'CVS' : 'HOME',
+            'LogisticsSubType' => $this->getSubtype(),
+            'GoodsAmount' => (int) $order->getTotal(),
+            'GoodsName' => $params['goods_name'] ?: '測試商品',
+            'SenderName' => $params['sender_name'] ?: '測試人員',
+            'SenderCellPhone' => $params['sender_mobile'] ?: '0912345678',
+            'IsCollection' => $shippingInfo->isCod() ? 'Y' : 'N',
+            'ReceiverName' => $name,
+            'ReceiverCellPhone' => $shippingData->getMobile() ?: $shippingData->getPhone(),
+
+            'ServerReplyURL' => (string) $nav->to('front::shipping_task')
+                ->task('notify')
+                ->id($order->getId())
+                ->full(),
+
+            'ReceiverStoreID' => $shippingData->cvsStoreId,
+        ];
+
+        Logger::info('ecpay-shipping-create', print_r($input, true));
+
+        $endpoint = $this->getEndpoint('Express/Create');
+        $res = $postService->post($input, $endpoint);
+
+        if (empty($res['RtnCode'])) {
+            $msg = sprintf(
+                "建立物流單給 %s 時出現錯誤: %s",
+                $order->getNo(),
+                array_key_first($res)
+            );
+
+            Logger::error('ecpay-shipping-create', $msg);
+            throw new ValidateFailException($msg);
+        }
+
+        Logger::error('ecpay-shipping-create', 'Receive Data:');
+        Logger::error('ecpay-shipping-create', print_r($res, true));
+
+        $order->setShippingNo($res['1|AllPayLogisticsID']);
+        $order->setShippingArgs($input);
+        $order->setShippingStatus($res['RtnMsg']);
+
+        $shippingData['CVSPaymentNo'] = $res['CVSPaymentNo'];
+        $shippingData['CVSValidationNo'] = $res['CVSValidationNo'];
+        $shippingData['CVSPrice'] = (int) $order->getTotal();
+
+        $this->orm->updateOne(Order::class, $order);
+    }
+
+    public function isCod(Order $order): bool
+    {
+        $params = $this->getParams();
+
+        return (bool) ($params['is_collection'] ?? false);
+    }
+
+    public function updateShippingStatus(Order $order): void
+    {
+        $factory = $this->getEcpayFactory(CheckMacValueService::METHOD_MD5);
+
+        $postService = $factory->create('PostWithCmvVerifiedEncodedStrResponseService');
+
+        $ecpayShippingNo = $order->getShippingNo();
+
+        if (!$ecpayShippingNo) {
+            return;
+        }
+
+        $input = [
+            'MerchantID' => $this->getMerchantID(),
+            'AllPayLogisticsID' => $ecpayShippingNo,
+            'TimeStamp' => time(),
+        ];
+
+        $response = $postService->post(
+            $input,
+            $this->getEndpoint('Helper/QueryLogisticsTradeInfo/V3')
+        );
+
+        $status = (int) $response['LogisticsStatus'];
+
+        $this->updateOrderByShippingStatus($order, $status, $response['ShipmentNo'] ?? '', $response);
+    }
+
+    public function updateOrderByShippingStatus(Order $order, int $status, string $shipmentNo, array $res): void
+    {
+        $statusText = $this->getStatusText($status);
+
+        if ($statusText === $order->getShippingStatus()) {
+            return;
+        }
+
+        Logger::info(
+            'ecpay-shipping-status',
+            "Update shipping status for: {$order->getNo()} => {$status}"
+        );
+
+        Logger::info(
+            'ecpay-shipping-status',
+            print_r($res, true)
+        );
+
+        $order->setShippingStatus($statusText);
+        $order->getShippingInfo()->setShipmentNo($shipmentNo ?? '');
+        $histories = $order->getShippingHistory();
+        $histories[] = (new ShippingHistory())
+            ->setTime('now')
+            ->setStatusText($statusText)
+            ->setStatusCode((string) $status);
+
+        $params = collect($this->getParams());
+
+        $this->orm->updateOne(Order::class, $order);
+
+        $orderService = $this->app->service(OrderService::class);
+
+        if ($this->isReceivedStatus($this->getSubtype(), $status)) {
+            $orderService->transition(
+                $order,
+                (int) $params['received_state'],
+                OrderHistoryType::SYSTEM(),
+                $statusText
+            );
+        } elseif ($this->isShippingStatus($this->getSubtype(), $status)) {
+            $order->setShippedAt('now');
+            $this->orm->updateOne(Order::class, $order);
+
+            $orderService->transition(
+                $order,
+                (int) $params['shipping_state'],
+                OrderHistoryType::SYSTEM(),
+                $statusText
+            );
+        } elseif ($this->isDeliveredStatus($this->getSubtype(), $status)) {
+            $orderService->transition(
+                $order,
+                (int) $params['delivered_state'],
+                OrderHistoryType::SYSTEM(),
+                $statusText
+            );
+        } elseif ($this->isUnPickStatus($this->getSubtype(), $status)) {
+            $orderService->transition(
+                $order,
+                (int) $params['unpick_state'],
+                OrderHistoryType::SYSTEM(),
+                $statusText
+            );
+        }
+    }
+
+    public function isDeliveredStatus(string $subType, int $status): bool
+    {
+        return match ($subType) {
+            'UNIMART', 'UNIMARTC2C' => $status === 2073,
+            'FAMI', 'FAMIC2C' => $status === 3018,
+            'HILIFE', 'HILIFEC2C' => $status === 2063 || $status === 3018,
+            default => false
+        };
+    }
+
+    public function isReceivedStatus(string $subType, int $status): bool
+    {
+        return match ($subType) {
+            'UNIMART', 'UNIMARTC2C' => $status === 2067,
+            'FAMI', 'FAMIC2C' => $status === 3022,
+            'HILIFE', 'HILIFEC2C' => $status === 2067 || $status === 3022,
+            default => false
+        };
+    }
+
+    public function isShippingStatus(string $subType, int $status): bool
+    {
+        return match ($subType) {
+            'UNIMART', 'UNIMARTC2C' => $status === 2068,
+            'FAMI', 'FAMIC2C' => $status === 3032,
+            'HILIFE', 'HILIFEC2C' => $status === 2030 || $status === 3032,
+            default => false
+        };
+    }
+
+    public function isUnPickStatus(string $subType, int $status): bool
+    {
+        return match ($subType) {
+            'UNIMART', 'UNIMARTC2C' => $status === 2074,
+            'FAMI', 'FAMIC2C' => $status === 3020,
+            'HILIFE', 'HILIFEC2C' => $status === 2074 || $status === 3020,
+            default => false
+        };
+    }
+
+    public function getStatusText(int $status): string
+    {
+        $type = $this->getLogisticType();
+        $subType = $this->getSubtype();
+
+        $statusMap = $this->cacheStorage['statuses']
+            ??= include __DIR__ . '/shipping_status.php';
+
+        $text = $statusMap[$type][$subType][$status] ?? null;
+
+        if ($text !== null) {
+            return $text;
+        }
+
+        $subType = match ($subType) {
+            'FAMIC2C' => 'FAMI',
+            'HILIFEC2C' => 'HILIFE',
+            'UNIMARTC2C' => 'UNIMART',
+            default => $subType
+        };
+
+        return $statusMap[$type][$subType][$status] ?? '未知狀態';
+    }
+
     public function getEndpoint(string $path): string
     {
         $stage = $this->isTest() ? '-stage' : '';
 
         return "https://logistics{$stage}.ecpay.com.tw/" . $path;
+    }
+
+    public function getLogisticType(): string
+    {
+        return $this->isCVSType() ? 'CVS' : 'HOME';
     }
 
     public function getSubtype()
