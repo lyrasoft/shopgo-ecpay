@@ -18,15 +18,20 @@ use Lyrasoft\ShopGo\Entity\Location;
 use Lyrasoft\ShopGo\Entity\Order;
 use Lyrasoft\ShopGo\Enum\OrderHistoryType;
 use Lyrasoft\ShopGo\Field\OrderStateListField;
+use Lyrasoft\ShopGo\Service\AddressService;
 use Lyrasoft\ShopGo\Service\OrderService;
 use Lyrasoft\ShopGo\Shipping\AbstractShipping;
 use Lyrasoft\ShopGo\Shipping\PriceRangeTrait;
+use Lyrasoft\ShopGo\Shipping\ShipmentCreatingInterface;
+use Lyrasoft\ShopGo\Shipping\ShipmentPrintableInterface;
+use Lyrasoft\ShopGo\Shipping\ShippingStatusInterface;
 use Lyrasoft\ShopGo\Traits\LayoutAwareTrait;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\UriInterface;
 use Unicorn\Field\ButtonRadioField;
 use Unicorn\Field\SwitcherField;
 use Windwalker\Core\Application\AppContext;
+use Windwalker\Core\Application\ApplicationInterface;
 use Windwalker\Core\DateTime\ChronosService;
 use Windwalker\Core\Form\Exception\ValidateFailException;
 use Windwalker\Core\Http\AppRequest;
@@ -47,12 +52,17 @@ use function Windwalker\collect;
 /**
  * The EcpayShipping class.
  */
-class EcpayShipping extends AbstractShipping
+class EcpayShipping extends AbstractShipping implements
+    ShipmentCreatingInterface,
+    ShipmentPrintableInterface,
+    ShippingStatusInterface
 {
     use PriceRangeTrait;
     use LayoutAwareTrait;
     use EcpayTrait;
     use InstanceCacheTrait;
+
+    public const TAIWAN_ADDRESS_FORMAT = "{postcode}{state}{city}{address1}{address2}";
 
     protected static string $type = '';
 
@@ -333,7 +343,7 @@ window.close();
 HTML;
     }
 
-    public function createShippingBill(Order $order): void
+    public function createShipment(Order $order): void
     {
         if ($order->getShippingNo()) {
             return;
@@ -345,7 +355,7 @@ HTML;
         $postService = $factory->create('PostWithCmvEncodedStrResponseService');
         $chronosService = $this->app->service(ChronosService::class);
 
-        Logger::info('ecpay-shipping-create', "Create Ecpay shipping bill for: {$order->getNo()}");
+        Logger::info('ecpay-shipment-create', "Create Ecpay shipment for: {$order->getNo()}");
 
         $no = $order->getNo();
 
@@ -374,7 +384,7 @@ HTML;
             'MerchantTradeNo' => $no,
             'MerchantTradeDate' => $chronosService->toLocalFormat('now', 'Y/m/d H:i:s'),
             'LogisticsType' => static::isCVS($gateway) ? 'CVS' : 'HOME',
-            'LogisticsSubType' => $this->getSubtype(),
+            'LogisticsSubType' => $gateway,
             'GoodsAmount' => (int) $order->getTotal(),
             'GoodsName' => $params['goods_name'] ?: '測試商品',
             'SenderName' => $params['sender_name'] ?: '測試人員',
@@ -388,10 +398,18 @@ HTML;
                 ->id($order->getId())
                 ->full(),
 
-            'ReceiverStoreID' => $shippingData->cvsStoreId,
+            // CVS
+            'ReceiverStoreID' => $shippingData->cvsStoreId ?? '',
+
+            // Home
+            'SenderZipCode' => $params['sender_zipcode'] ?? '',
+            'SenderAddress' => $params['sender_address'] ?? '',
+            'ReceiverZipCode' => $shippingData->getPostcode(),
+            // 'ReceiverAddress' => AddressService::format($shippingData, static::TAIWAN_ADDRESS_FORMAT),
+            'ReceiverAddress' => '台北市大安區忠孝東路三段96號4F-1',
         ];
 
-        Logger::info('ecpay-shipping-create', print_r($input, true));
+        Logger::info('ecpay-shipment-create', print_r($input, true));
 
         $endpoint = $this->getEndpoint('Express/Create');
         $res = $postService->post($input, $endpoint);
@@ -403,12 +421,12 @@ HTML;
                 array_key_first($res)
             );
 
-            Logger::error('ecpay-shipping-create', $msg);
+            Logger::error('ecpay-shipment-create', $msg);
             throw new ValidateFailException($msg);
         }
 
-        Logger::error('ecpay-shipping-create', 'Receive Data:');
-        Logger::error('ecpay-shipping-create', print_r($res, true));
+        Logger::error('ecpay-shipment-create', 'Receive Data:');
+        Logger::error('ecpay-shipment-create', print_r($res, true));
 
         $order->setShippingNo($res['1|AllPayLogisticsID']);
         $order->setShippingArgs($input);
@@ -586,11 +604,72 @@ HTML;
         return $statusMap[$type][$subType][$status] ?? '未知狀態';
     }
 
+    /**
+     * Batch print multiple shipments.
+     *
+     * @param  ApplicationInterface  $app
+     * @param  iterable<Order>       $orders
+     *
+     * @return  mixed Return response, uri or text.
+     */
+    public function printShipments(ApplicationInterface $app, iterable $orders): mixed
+    {
+        $params = $this->getParams();
+        $gateway = $this->getLogisticType();
+        $subType = $this->getSubtype();
+
+        $b2c = !str_contains($subType, 'C2C');
+        $logisticIds = [];
+        $paymentNos = [];
+        $validationNos = [];
+
+        $autoSubmitFormService = $this->getEcpayFactory(CheckMacValueService::METHOD_MD5)
+            ->create('AutoSubmitFormWithCmvService');
+
+        foreach ($orders as $order) {
+            if (!$order->getShippingNo()) {
+                $this->createShipment($order);
+            }
+
+            $shippingData  = $order->getShippingData();
+            $logisticIds[] = $order->getShippingNo();
+            $paymentNos[] = $shippingData->cvsPaymentNo ?? '';
+            $validationNos[] = $shippingData->cvsValidationNo ?? '';
+        }
+
+        $input = [
+            'MerchantID' => $this->getMerchantID(),
+            'AllPayLogisticsID' => implode(',', $logisticIds),
+            'CVSPaymentNo' => implode(',', $paymentNos),
+            'CVSValidationNo' => implode(',', $validationNos),
+        ];
+
+        if ($gateway !== 'HOME' && !$b2c) {
+            $uri = match ($this->getSubtype()) {
+                'UNIMARTC2C' => 'Express/PrintUniMartC2COrderInfo',
+                'FAMIC2C' => 'Express/PrintFAMIC2COrderInfo',
+                'HILIFEC2C' => 'Express/PrintHILIFEC2COrderInfo',
+                'OKMARTC2C' => 'Express/PrintOKMARTC2COrderInfo',
+            };
+        } else {
+            $uri = 'helper/printTradeDocument';
+        }
+
+        return $autoSubmitFormService->generate($input, $this->getEndpoint($uri));
+    }
+
     public function getEndpoint(string $path): string
     {
         $stage = $this->isTest() ? '-stage' : '';
 
         return "https://logistics{$stage}.ecpay.com.tw/" . $path;
+    }
+
+    public function getGateway(): string
+    {
+        $params = $this->getParams();
+
+        return $params['gateway'] ?? '';
     }
 
     public function getLogisticType(): string
@@ -623,6 +702,7 @@ HTML;
     {
         return in_array($type, ['FAMI', 'UNIMART', 'HILIFE'], true);
     }
+
 
     public function getEcpayServiceName(): string
     {
