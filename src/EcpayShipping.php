@@ -90,7 +90,8 @@ class EcpayShipping extends AbstractShipping implements
                     function (Form $form) {
                         $form->add('gateway', ListField::class)
                             ->label('貨運方式')
-                            ->registerFromEnums(EcpayShippingType::class);
+                            ->registerFromEnums(EcpayShippingType::class)
+                            ->defaultValue(EcpayShippingType::TCAT);
 
                         $form->add('merchant_id', TextField::class)
                             ->label('MerchantID')

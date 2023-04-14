@@ -30,7 +30,6 @@ use Windwalker\Core\Language\LangService;
 use Windwalker\Core\Language\TranslatorTrait;
 use Windwalker\Core\Router\Navigator;
 use Windwalker\Core\Router\RouteUri;
-use Windwalker\DI\Attributes\Inject;
 use Windwalker\Form\Field\CheckboxesField;
 use Windwalker\Form\Field\ListField;
 use Windwalker\Form\Field\SpacerField;
@@ -85,7 +84,8 @@ class EcpayPayment extends AbstractPayment
 
                         $form->add('gateway', ListField::class)
                             ->label('支付方式')
-                            ->registerFromEnums(EcpayPaymentType::class);
+                            ->registerFromEnums(EcpayPaymentType::class)
+                            ->defaultValue(EcpayPaymentType::ATM);
 
                         $form->add('installment', CheckboxesField::class)
                             ->label('信用卡分期')
