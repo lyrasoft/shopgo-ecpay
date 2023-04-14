@@ -14,11 +14,11 @@ namespace Lyrasoft\ShopGo\Ecpay;
 use Ecpay\Sdk\Services\CheckMacValueService;
 use Lyrasoft\ShopGo\Cart\CartData;
 use Lyrasoft\ShopGo\Data\ShippingHistory;
+use Lyrasoft\ShopGo\Ecpay\Enum\EcpayShippingType;
 use Lyrasoft\ShopGo\Entity\Location;
 use Lyrasoft\ShopGo\Entity\Order;
 use Lyrasoft\ShopGo\Enum\OrderHistoryType;
 use Lyrasoft\ShopGo\Field\OrderStateListField;
-use Lyrasoft\ShopGo\Service\AddressService;
 use Lyrasoft\ShopGo\Service\OrderService;
 use Lyrasoft\ShopGo\Shipping\AbstractShipping;
 use Lyrasoft\ShopGo\Shipping\PriceRangeTrait;
@@ -90,11 +90,7 @@ class EcpayShipping extends AbstractShipping implements
                     function (Form $form) {
                         $form->add('gateway', ListField::class)
                             ->label('貨運方式')
-                            ->option('黑貓', 'TCAT')
-                            ->option('中華郵政', 'POST')
-                            ->option('全家超商', 'FAMI')
-                            ->option('統一超商', 'UNIMART')
-                            ->option('萊爾富超商', 'HILIFE');
+                            ->registerFromEnums(EcpayShippingType::class);
 
                         $form->add('merchant_id', TextField::class)
                             ->label('MerchantID')

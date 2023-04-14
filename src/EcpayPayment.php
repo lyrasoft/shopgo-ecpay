@@ -15,6 +15,7 @@ use Ecpay\Sdk\Response\VerifiedArrayResponse;
 use Ecpay\Sdk\Services\UrlService;
 use Lyrasoft\ShopGo\Cart\CartData;
 use Lyrasoft\ShopGo\Cart\CartStorage;
+use Lyrasoft\ShopGo\Ecpay\Enum\EcpayPaymentType;
 use Lyrasoft\ShopGo\Entity\Location;
 use Lyrasoft\ShopGo\Entity\Order;
 use Lyrasoft\ShopGo\Entity\OrderItem;
@@ -84,12 +85,7 @@ class EcpayPayment extends AbstractPayment
 
                         $form->add('gateway', ListField::class)
                             ->label('支付方式')
-                            ->option('ATM 虛擬帳戶繳款', 'ATM')
-                            ->option('超商條碼繳款', 'BARCODE')
-                            ->option('CVS 超商代碼繳款', 'CVS')
-                            ->option('WebATM 繳款', 'WebATM')
-                            ->option('Apple Pay', 'ApplePay')
-                            ->option('信用卡繳款', 'Credit');
+                            ->registerFromEnums(EcpayPaymentType::class);
 
                         $form->add('installment', CheckboxesField::class)
                             ->label('信用卡分期')
