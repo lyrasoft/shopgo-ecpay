@@ -253,6 +253,10 @@ class EcpayPayment extends AbstractPayment
             if ((string) $res['RtnCode'] === '1') {
                 $paidStateId = $this->getParams()['payment']['paid_state'];
 
+                if (!$order->getPaidAt()) {
+                    $order->setPaidAt('now');
+                }
+
                 $orderService->transition(
                     $order,
                     $paidStateId,
@@ -260,9 +264,6 @@ class EcpayPayment extends AbstractPayment
                     '付款成功',
                     true
                 );
-
-                // Todo: Create invoice
-                // $invoiceService->updateOrderInvoice($order);
             } else {
                 $failedStateId = $this->getParams()['payment']['failure_state'];
 
