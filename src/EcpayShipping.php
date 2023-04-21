@@ -19,6 +19,8 @@ use Lyrasoft\ShopGo\Entity\Location;
 use Lyrasoft\ShopGo\Entity\Order;
 use Lyrasoft\ShopGo\Enum\OrderHistoryType;
 use Lyrasoft\ShopGo\Field\OrderStateListField;
+use Lyrasoft\ShopGo\Field\PaymentModalField;
+use Lyrasoft\ShopGo\Service\AddressService;
 use Lyrasoft\ShopGo\Service\OrderService;
 use Lyrasoft\ShopGo\Shipping\AbstractShipping;
 use Lyrasoft\ShopGo\Shipping\PriceRangeTrait;
@@ -41,6 +43,7 @@ use Windwalker\Core\Router\Navigator;
 use Windwalker\Core\Router\RouteUri;
 use Windwalker\Form\Field\ListField;
 use Windwalker\Form\Field\NumberField;
+use Windwalker\Form\Field\RadioField;
 use Windwalker\Form\Field\SpacerField;
 use Windwalker\Form\Field\TextField;
 use Windwalker\Form\Form;
@@ -167,10 +170,16 @@ class EcpayShipping extends AbstractShipping implements
                             ->defaultValue('B2C')
                             ->help('備註: 統一超商的店到店稱為【統一超商交貨便】');
 
-                        $form->add('is_collection', SwitcherField::class)
-                            ->label('代收貨款')
-                            ->circle(true)
-                            ->color('primary');
+                        $form->add('is_collection', ButtonRadioField::class)
+                            ->label('貨到付款')
+                            ->option('是', '1')
+                            ->option('否', '0')
+                            ->option('選擇特定付款方式', 'listed');
+
+                        $form->add('cod_payments', PaymentModalField::class)
+                            ->label('貨到付款對應的付款方式')
+                            ->set('showon', ['params/is_collection' => 'listed'])
+                            ->multiple(true);
 
                         $form->add('temperature', ButtonRadioField::class)
                             ->label('溫層')
@@ -310,7 +319,6 @@ class EcpayShipping extends AbstractShipping implements
             'MerchantID' => $this->getMerchantID(),
             'LogisticsType' => 'CVS',
             'LogisticsSubType' => $params['gateway'],
-            'IsCollection' => $params['is_collection'] ? 'Y' : 'N',
 
             // 請參考 example/Logistics/Domestic/GetMapResponse.php 範例開發
             'ServerReplyURL' => $reply = (string) $nav->to('shipping_task')
@@ -402,8 +410,7 @@ HTML;
             'SenderZipCode' => $params['sender_zipcode'] ?? '',
             'SenderAddress' => $params['sender_address'] ?? '',
             'ReceiverZipCode' => $shippingData->getPostcode(),
-            // 'ReceiverAddress' => AddressService::format($shippingData, static::TAIWAN_ADDRESS_FORMAT),
-            'ReceiverAddress' => '台北市大安區忠孝東路三段96號4F-1',
+            'ReceiverAddress' => AddressService::format($shippingData, static::TAIWAN_ADDRESS_FORMAT),
         ];
 
         Logger::info('ecpay-shipment-create', print_r($input, true));
@@ -440,7 +447,15 @@ HTML;
     {
         $params = $this->getParams();
 
-        return (bool) ($params['is_collection'] ?? false);
+        $isCollection = $params['is_collection'] ?? '0';
+
+        if ($isCollection === 'listed') {
+            return collect($params['cod_payments'] ?? [])
+                ->map('intval')
+                ->contains($order->getPaymentId());
+        }
+
+        return (bool) $isCollection;
     }
 
     public function updateShippingStatus(Order $order): void
