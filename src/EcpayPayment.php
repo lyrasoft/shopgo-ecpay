@@ -37,6 +37,8 @@ use Windwalker\Form\Field\TextField;
 use Windwalker\Form\Form;
 use Windwalker\ORM\ORM;
 
+use function Windwalker\chronos;
+
 /**
  * The EcpayPayment class.
  */
@@ -159,6 +161,7 @@ class EcpayPayment extends AbstractPayment
 
         $nav = $this->app->service(Navigator::class);
         $chronos = $this->app->service(ChronosService::class);
+        $expireDate = chronos('+10minutes');
 
         $notify = $nav->to('payment_task')
             ->id($this->getData()->getId())
@@ -195,6 +198,10 @@ class EcpayPayment extends AbstractPayment
             }
         }
 
+        if ($params['gateway'] === 'ATM') {
+            $expireDate = chronos('+7days');
+        }
+
         $factory = $this->getEcpayFactory();
         $autoSubmitFormService = $factory->create('AutoSubmitFormWithCmvService');
 
@@ -202,7 +209,10 @@ class EcpayPayment extends AbstractPayment
 
         $orm->updateBatch(
             Order::class,
-            ['payment_args' => json_encode($input)],
+            [
+                'expiry_on' => $expireDate,
+                'payment_args' => json_encode($input)
+            ],
             ['id' => $order->getId()]
         );
 
