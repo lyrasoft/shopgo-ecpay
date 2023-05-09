@@ -29,6 +29,7 @@ use Windwalker\Core\Application\AppContext;
 use Windwalker\Core\DateTime\ChronosService;
 use Windwalker\Core\Language\LangService;
 use Windwalker\Core\Language\TranslatorTrait;
+use Windwalker\Core\Manager\Logger;
 use Windwalker\Core\Router\Navigator;
 use Windwalker\Core\Router\RouteUri;
 use Windwalker\Form\Field\CheckboxesField;
@@ -241,19 +242,24 @@ class EcpayPayment extends AbstractPayment
         /** @var VerifiedArrayResponse $checkoutResponse */
         $checkoutResponse = $factory->create(VerifiedArrayResponse::class);
 
+        $no = (string) $app->input('no');
+
         try {
             $res = $checkoutResponse->get($_POST);
         } catch (\Exception $e) {
+            Logger::error('ecpay-payment-error', $no);
+            Logger::error('ecpay-payment-error', $e->getMessage());
             return '0|' . $e->getMessage();
         }
 
         $orm = $app->service(ORM::class);
         $orderService = $app->service(OrderService::class);
 
-        $no = (string) $app->input('no');
         $order = $orm->findOne(Order::class, compact('no'));
 
         if (!$order) {
+            Logger::error('ecpay-payment-error', $no);
+            Logger::error('ecpay-payment-error', 'Order not found');
             return '0|No order';
         }
 
@@ -294,6 +300,9 @@ class EcpayPayment extends AbstractPayment
                 compact('params'),
                 ['id' => $order->getId()]
             );
+
+            Logger::error('ecpay-payment-error', $no);
+            Logger::error('ecpay-payment-error', $e->getMessage());
 
             return '0|' . $e->getMessage();
         }
