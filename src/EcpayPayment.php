@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Lyrasoft\ShopGo\Ecpay;
 
 use Ecpay\Sdk\Response\VerifiedArrayResponse;
+use Ecpay\Sdk\Services\CheckMacValueService;
 use Ecpay\Sdk\Services\UrlService;
 use Lyrasoft\ShopGo\Cart\CartData;
 use Lyrasoft\ShopGo\Cart\CartStorage;
@@ -261,7 +262,7 @@ class EcpayPayment extends AbstractPayment
 
         try {
             if ((string) $res['RtnCode'] === '1') {
-                $paidStateId = $this->getParams()['payment']['paid_state'];
+                $paidStateId = $this->getParams()['paid_state'];
 
                 if (!$order->getPaidAt()) {
                     $order->setPaidAt('now');
