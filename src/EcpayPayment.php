@@ -268,7 +268,7 @@ class EcpayPayment extends AbstractPayment
 
         try {
             if ((string) $res['RtnCode'] === '1') {
-                $paidStateId = $this->getParams()['paid_state'];
+                $paidStateId = (int) $this->getParams()['paid_state'];
 
                 if (!$order->getPaidAt()) {
                     $order->setPaidAt('now');
@@ -282,7 +282,7 @@ class EcpayPayment extends AbstractPayment
                     true
                 );
             } else {
-                $failedStateId = $this->getParams()['payment']['failure_state'];
+                $failedStateId = (int) $this->getParams()['failure_state'];
 
                 $orderService->transition(
                     $order,
