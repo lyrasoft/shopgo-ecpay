@@ -47,6 +47,7 @@ use Windwalker\Form\Field\RadioField;
 use Windwalker\Form\Field\SpacerField;
 use Windwalker\Form\Field\TextField;
 use Windwalker\Form\Form;
+use Windwalker\ORM\ORM;
 use Windwalker\Utilities\Cache\InstanceCacheTrait;
 use Windwalker\Utilities\Str;
 
@@ -304,6 +305,7 @@ class EcpayShipping extends AbstractShipping implements
         return match ($task) {
             'mapSelect' => $app->call([$this, 'mapSelect']),
             'mapReply' => $app->call([$this, 'mapReply']),
+            'notify' => $app->call([$this, 'notifyStatus']),
         };
     }
 
@@ -346,6 +348,18 @@ window.opener.{$callback}($data);
 window.close();
 </script>
 HTML;
+    }
+
+    public function notifyStatus(AppContext $app, ORM $orm)
+    {
+        Logger::info('shipping-notify', $app->getSystemUri()->full());
+        Logger::info('shipping-notify', print_r($_REQUEST, true));
+
+        $id = $app->input('id');
+
+        $order = $orm->mustFindOne(Order::class, $id);
+
+        $this->updateOrderByShippingStatus($order, (int) $_POST['RtnCode'], $_POST['CVSPaymentNo'] ?? '', $_POST);
     }
 
     public function createShipment(Order $order): void
