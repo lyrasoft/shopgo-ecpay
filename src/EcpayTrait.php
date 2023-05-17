@@ -59,7 +59,7 @@ trait EcpayTrait
      */
     protected function getEnvCredentials(): array
     {
-        $serviceName = strtolower(static::getEcpayServiceName());
+        $serviceName = strtoupper(static::getEcpayServiceName());
 
         return [
             env("ECPAY_{$serviceName}_MERCHANT_ID", '2000132'),
