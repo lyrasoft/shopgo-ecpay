@@ -317,10 +317,12 @@ class EcpayShipping extends AbstractShipping implements
 
         $formService = $ecpay->create('AutoSubmitFormWithCmvService');
 
+        $subTtype = $this->isTest() ? $params['gateway'] : $this->getSubtype();
+
         $input = [
             'MerchantID' => $this->getMerchantID(),
             'LogisticsType' => 'CVS',
-            'LogisticsSubType' => $params['gateway'],
+            'LogisticsSubType' => $subTtype,
 
             // 請參考 example/Logistics/Domestic/GetMapResponse.php 範例開發
             'ServerReplyURL' => $reply = (string) $nav->to('shipping_task')
