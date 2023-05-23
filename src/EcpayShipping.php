@@ -320,7 +320,7 @@ class EcpayShipping extends AbstractShipping implements
         $input = [
             'MerchantID' => $this->getMerchantID(),
             'LogisticsType' => 'CVS',
-            'LogisticsSubType' => $params['gateway'],
+            'LogisticsSubType' => $this->isTest() ? $this->getGateway() : $this->getSubtype(),
 
             // 請參考 example/Logistics/Domestic/GetMapResponse.php 範例開發
             'ServerReplyURL' => $reply = (string) $nav->to('shipping_task')
@@ -402,8 +402,8 @@ HTML;
             'MerchantID' => $this->getMerchantID(),
             'MerchantTradeNo' => $no,
             'MerchantTradeDate' => $chronosService->toLocalFormat('now', 'Y/m/d H:i:s'),
-            'LogisticsType' => static::isCVS($gateway) ? 'CVS' : 'HOME',
-            'LogisticsSubType' => $gateway,
+            'LogisticsType' => $this->getLogisticType(),
+            'LogisticsSubType' => $this->getSubtype(),
             'GoodsAmount' => (int) $order->getTotal(),
             'GoodsName' => $params['goods_name'] ?: '測試商品',
             'SenderName' => $params['sender_name'] ?: '測試人員',
