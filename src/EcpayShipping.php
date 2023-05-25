@@ -357,10 +357,10 @@ HTML;
         Logger::info('shipping-notify', $app->getSystemUri()->full());
         Logger::info('shipping-notify', print_r($_REQUEST, true));
 
-        $id = $app->input('id');
+        $orderId = $app->input('order_id');
 
         try {
-            $order = $orm->mustFindOne(Order::class, $id);
+            $order = $orm->mustFindOne(Order::class, $orderId);
 
             $this->updateOrderByShippingStatus($order, (int) $_POST['RtnCode'], $_POST['CVSPaymentNo'] ?? '', $_POST);
         } catch (\Throwable $e) {
@@ -422,7 +422,8 @@ HTML;
 
             'ServerReplyURL' => (string) $nav->to('front::shipping_task')
                 ->task('notify')
-                ->id($order->getId())
+                ->id($this->getData()->getId()) // Shipping ID
+                ->var('order_id', $order->getId())
                 ->full(),
 
             // CVS
