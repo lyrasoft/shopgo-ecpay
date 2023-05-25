@@ -352,16 +352,22 @@ window.close();
 HTML;
     }
 
-    public function notifyStatus(AppContext $app, ORM $orm)
+    public function notifyStatus(AppContext $app, ORM $orm): string
     {
         Logger::info('shipping-notify', $app->getSystemUri()->full());
         Logger::info('shipping-notify', print_r($_REQUEST, true));
 
         $id = $app->input('id');
 
-        $order = $orm->mustFindOne(Order::class, $id);
+        try {
+            $order = $orm->mustFindOne(Order::class, $id);
 
-        $this->updateOrderByShippingStatus($order, (int) $_POST['RtnCode'], $_POST['CVSPaymentNo'] ?? '', $_POST);
+            $this->updateOrderByShippingStatus($order, (int) $_POST['RtnCode'], $_POST['CVSPaymentNo'] ?? '', $_POST);
+        } catch (\Throwable $e) {
+            return '0|' . $e->getMessage();
+        }
+
+        return '1|OK';
     }
 
     public function createShipment(Order $order): void
