@@ -120,6 +120,7 @@ class EcpayShipping extends AbstractShipping implements
                         $form->add('sender_name', TextField::class)
                             ->label('寄件人姓名')
                             ->required(true)
+                            ->attr('pattern', '^[\u4e00-\u9fa5]{2,5}$|^[a-zA-Z]{4,10}$')
                             ->defaultValue('測試人員');
 
                         $form->add('sender_phone', TextField::class)
