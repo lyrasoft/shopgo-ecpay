@@ -267,12 +267,12 @@ class EcpayShipping extends AbstractShipping implements
         if ($this->isCVSType() && $shipping) {
             $data = $order->getShippingData();
 
-            $data['CVSAddress'] = $shipping['CVSAddress'] ?? '';
-            $data['CVSOutSide'] = $shipping['CVSOutSide'] ?? '';
-            $data['CVSStoreID'] = $shipping['CVSStoreID'] ?? '';
-            $data['CVSStoreName'] = $shipping['CVSStoreName'] ?? '';
-            $data['CVSTelephone'] = $shipping['CVSTelephone'] ?? '';
-            $data['LogisticsSubType'] = $shipping['LogisticsSubType'] ?? '';
+            $data['cvsAddress'] = $shipping['CVSAddress'] ?? '';
+            $data['cvsOutSide'] = $shipping['CVSOutSide'] ?? '';
+            $data['cvsStoreID'] = $shipping['CVSStoreID'] ?? '';
+            $data['cvsStoreName'] = $shipping['CVSStoreName'] ?? '';
+            $data['cvsTelephone'] = $shipping['CVSTelephone'] ?? '';
+            $data['logisticsSubType'] = $shipping['LogisticsSubType'] ?? '';
         }
 
         return $order;
@@ -459,9 +459,9 @@ HTML;
         $order->setShippingArgs($input);
         $order->setShippingStatus($res['RtnMsg']);
 
-        $shippingData['CVSPaymentNo'] = $res['CVSPaymentNo'];
-        $shippingData['CVSValidationNo'] = $res['CVSValidationNo'];
-        $shippingData['CVSPrice'] = (int) $order->getTotal();
+        $shippingData['cvsPaymentNo'] = $res['CVSPaymentNo'];
+        $shippingData['cvsValidationNo'] = $res['CVSValidationNo'];
+        $shippingData['cvsPrice'] = (int) $order->getTotal();
 
         $this->orm->updateOne(Order::class, $order);
     }
@@ -528,7 +528,10 @@ HTML;
         );
 
         $order->setShippingStatus($statusText);
-        $order->getShippingInfo()->setShipmentNo($shipmentNo ?? '');
+        $order->getShippingInfo()
+            ->setShipmentNo($shipmentNo ?? '')
+            ->setStatus((string) $status)
+            ->setStatusText($statusText);
         $histories = $order->getShippingHistory();
         $histories[] = (new ShippingHistory())
             ->setTime('now')
@@ -668,8 +671,10 @@ HTML;
 
             $shippingData  = $order->getShippingData();
             $logisticIds[] = $order->getShippingNo();
-            $paymentNos[] = $shippingData->cvsPaymentNo ?? '';
-            $validationNos[] = $shippingData->cvsValidationNo ?? '';
+
+            // Todo: Use camel after ValueObject issue fixed: https://github.com/windwalker-io/framework/issues/1046
+            $paymentNos[] = $shippingData->cvsPaymentNo ?? $shippingData->CVSPaymentNo ?? '';
+            $validationNos[] = $shippingData->cvsValidationNo ?? $shippingData->CVSValidationNo ?? '';
         }
 
         $input = [
