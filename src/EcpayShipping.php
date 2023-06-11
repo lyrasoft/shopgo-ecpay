@@ -670,6 +670,9 @@ HTML;
                 $this->createShipment($order);
             }
 
+            // Re load order to fix ValueObject case issue
+            $order = $this->orm->mustFindOne(Order::class, $order->getId());
+
             $shippingData  = $order->getShippingData();
             $logisticIds[] = $order->getShippingNo();
 
