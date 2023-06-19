@@ -314,7 +314,7 @@ class EcpayPayment extends AbstractPayment
     {
         $no = (string) $app->input('no');
 
-        $cartStorage->clear();
+        $cartStorage->clearChecked();
         $app->state->forget('checkout.data');
 
         return $nav->to('checkout')
