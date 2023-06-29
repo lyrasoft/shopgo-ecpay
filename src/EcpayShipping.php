@@ -744,7 +744,7 @@ HTML;
 
     public static function isCVS(string $type): bool
     {
-        return in_array($type, ['FAMI', 'UNIMART', 'HILIFE'], true);
+        return in_array($type, ['FAMI', 'UNIMART', 'HILIFE', 'OKMART'], true);
     }
 
 
