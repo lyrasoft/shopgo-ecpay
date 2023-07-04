@@ -585,6 +585,7 @@ HTML;
             'UNIMART', 'UNIMARTC2C' => $status === 2073,
             'FAMI', 'FAMIC2C' => $status === 3018,
             'HILIFE', 'HILIFEC2C' => $status === 2063 || $status === 3018,
+            'OKMART', 'OKMARTC2C' => $status === 2073,
             default => false
         };
     }
@@ -595,6 +596,7 @@ HTML;
             'UNIMART', 'UNIMARTC2C' => $status === 2067,
             'FAMI', 'FAMIC2C' => $status === 3022,
             'HILIFE', 'HILIFEC2C' => $status === 2067 || $status === 3022,
+            'OKMART', 'OKMARTC2C' => $status === 3022,
             default => false
         };
     }
@@ -605,6 +607,7 @@ HTML;
             'UNIMART', 'UNIMARTC2C' => $status === 2068,
             'FAMI', 'FAMIC2C' => $status === 3032,
             'HILIFE', 'HILIFEC2C' => $status === 2030 || $status === 3032,
+            'OKMART', 'OKMARTC2C' => $status === 2030 || $status === 3032,
             default => false
         };
     }
@@ -615,6 +618,7 @@ HTML;
             'UNIMART', 'UNIMARTC2C' => $status === 2074,
             'FAMI', 'FAMIC2C' => $status === 3020,
             'HILIFE', 'HILIFEC2C' => $status === 2074 || $status === 3020,
+            'HILIFE', 'HILIFEC2C' => $status === 2074 || $status === 2078,
             default => false
         };
     }
@@ -637,6 +641,7 @@ HTML;
             'FAMIC2C' => 'FAMI',
             'HILIFEC2C' => 'HILIFE',
             'UNIMARTC2C' => 'UNIMART',
+            'OKMARTC2C' => 'OKMART',
             default => $subType
         };
 
