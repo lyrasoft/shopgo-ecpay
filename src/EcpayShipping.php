@@ -416,7 +416,7 @@ HTML;
             'GoodsAmount' => (int) $order->getTotal(),
             'GoodsName' => $params['goods_name'] ?: '測試商品',
             'SenderName' => $params['sender_name'] ?: '測試人員',
-            'SenderCellPhone' => $params['sender_mobile'] ?: '0912345678',
+            'SenderCellPhone' => $params['sender_cellphone'] ?: '0912345678',
             'IsCollection' => $shippingInfo->isCod() ? 'Y' : 'N',
             'ReceiverName' => $name,
             'ReceiverCellPhone' => $shippingData->getMobile() ?: $shippingData->getPhone(),
