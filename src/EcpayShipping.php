@@ -747,8 +747,12 @@ HTML;
         return static::isCVS($type);
     }
 
-    public static function isCVS(string $type): bool
+    public static function isCVS(string|EcpayShippingType $type): bool
     {
+        if ($type instanceof EcpayShippingType) {
+            $type = $type->value;
+        }
+
         return in_array($type, ['FAMI', 'UNIMART', 'HILIFE', 'OKMART'], true);
     }
 
