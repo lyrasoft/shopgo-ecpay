@@ -231,7 +231,7 @@ class EcpayShipping extends AbstractShipping implements
             $maxAmount = $params['cvs_max_amount'] ?? 19999;
             $minAmount = $params['cvs_min_amount'] ?? 0;
 
-            $total = $cartData->getTotals()['total'];
+            $total = $cartData->totals['total'];
 
             return !($total->gt($maxAmount) || $total->lt($minAmount));
         }

@@ -51,3 +51,21 @@ return [
             'samesite' => CookiesInterface::SAMESITE_NONE, // Set this to `SAMESITE_NONE`
         ],
 ```
+
+### CSRF
+
+Since Ecpay may call back to out website, you must exclude 2 routes from CSRF at `front.route.php`:
+
+```php
+// front.route.php
+
+    ->middleware(
+        CsrfMiddleware::class,
+        excludes: [
+            'front::backup',
+            'front::shipping_task',
+            'front::payment_task',
+        ]
+    )
+```
+
