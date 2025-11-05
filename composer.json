@@ -3,6 +3,8 @@
     "description": "ShopGo Ecpay package",
     "type": "shopgo-package",
     "require": {
+        "php": ">=8.4.6",
+        "lyrasoft/shopgo": "0.*",
         "ecpay/sdk": "^1.2"
     },
     "license": "MIT",
