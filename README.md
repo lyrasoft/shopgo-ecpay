@@ -69,3 +69,30 @@ Since Ecpay may call back to out website, you must exclude 2 routes from CSRF at
     )
 ```
 
+## JS
+
+After composer install, Wil automatically install the required JS packages.
+
+```json
+  "@lyrasoft/shopgo-ecpay": "portal:./vendor/lyrasoft/shopgo-ecpay/assets"
+```
+
+Run:
+
+```bash
+yarn install
+```
+
+Then add this to `front/main.ts` after `useShopGoCatalog()`
+
+```diff
+// front/main.ts
+
++import { useShopGoEcpay } from '@lyrasoft/shopgo-ecpay';
+
+// ...
+
+useShopGoCatalog();
++useShopGoEcpay();
+```
+

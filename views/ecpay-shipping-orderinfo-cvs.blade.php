@@ -32,8 +32,8 @@ use function Windwalker\uid;
  * @var $order    Order
  */
 
-$shippingData = $order->getShippingData();
-$shippingInfo = $order->getShippingInfo();
+$shippingData = $order->shippingData;
+$shippingInfo = $order->shippingInfo;
 
 ?>
 

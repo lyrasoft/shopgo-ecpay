@@ -1,0 +1,16 @@
+{
+    "extends": [
+        //
+    ],
+    "include": [
+        "./vite.config.ts",
+    ],
+    "types": ["reflect-metadata"],
+    "compilerOptions": {
+        "target": "esnext",
+        "module": "esnext",
+        "moduleResolution": "nodenext",
+        "skipLibCheck": true,
+        "allowSyntheticDefaultImports": true
+    }
+}

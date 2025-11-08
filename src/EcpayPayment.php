@@ -121,7 +121,7 @@ class EcpayPayment extends AbstractPayment
                 ->title($this->trans('shopgo.payment.fieldset.layout'))
                 ->register(
                     function (Form $form) {
-                        $form->add('checkout_form_layout', TextField::class)
+                        $form->add('checkout_form_inject_id', TextField::class)
                             ->label($this->trans('shopgo.payment.field.checkout.form.layout'))
                             ->defaultValue('ecpay-payment-form');
                     }
@@ -135,21 +135,12 @@ class EcpayPayment extends AbstractPayment
     }
 
 
-    public function form(Location $location): string
+    public function form(Location $location): ?array
     {
         // Todo: make installment choose layout
-        $layout = $this->getParams()['checkout_form_layout'] ?? null ?: 'ecpay-payment-form';
+        $layout = $this->getParams()['checkout_form_inject_id'] ?? null ?: 'shopgo.ecpay.payment-form';
 
-        if (!$layout) {
-            return '';
-        }
-
-        return $this->renderLayout(
-            $layout,
-            [
-                'payment' => $this,
-            ]
-        );
+        return null;
     }
 
     public function prepareOrder(Order $order, CartData $cartData, array $checkoutData = []): Order
@@ -166,23 +157,23 @@ class EcpayPayment extends AbstractPayment
         $expireDate = chronos('+10minutes');
 
         $notify = $nav->to('payment_task')
-            ->id($this->getData()->getId())
-            ->var('no', $order->getNo())
+            ->id($this->getData()->id)
+            ->var('no', $order->no)
             ->full();
 
         $desc = [];
 
         /** @var OrderItem $orderItem */
-        foreach ($order->getOrderItems()->getAttachedEntities() as $orderItem) {
-            $desc[] = "{$orderItem->getTitle()} x {$orderItem->getQuantity()}";
+        foreach ($order->orderItems->getAttachedEntities() as $orderItem) {
+            $desc[] = "{$orderItem->title} x {$orderItem->quantity}";
         }
 
         $input = [
             'MerchantID' => $this->getMerchantID(),
-            'MerchantTradeNo' => $order->getPaymentNo(),
+            'MerchantTradeNo' => $order->paymentNo,
             'MerchantTradeDate' => $chronos->toLocalFormat('now', 'Y/m/d H:i:s'),
             'PaymentType' => 'aio',
-            'TotalAmount' => (int) $order->getTotal(),
+            'TotalAmount' => (int) $order->total,
             'TradeDesc' => UrlService::ecpayUrlEncode('Shop Checkout'),
             'ItemName' => implode("#", $desc),
             'ReturnURL' => (string) $notify->task('receivePaid'),
@@ -215,7 +206,7 @@ class EcpayPayment extends AbstractPayment
                 'expiry_on' => $expireDate,
                 'payment_args' => json_encode($input)
             ],
-            ['id' => $order->getId()]
+            ['id' => $order->id]
         );
 
         return $autoSubmitFormService->generate(
@@ -263,21 +254,21 @@ class EcpayPayment extends AbstractPayment
             return '0|No order';
         }
 
-        $params = &$order->getParams();
+        $params = &$order->params;
         $params['payment_notify_error'] = null;
 
         try {
             if ((string) $res['RtnCode'] === '1') {
                 $paidStateId = (int) $this->getParams()['paid_state'];
 
-                if (!$order->getPaidAt()) {
-                    $order->setPaidAt('now');
+                if (!$order->paidAt) {
+                    $order->paidAt = 'now';
                 }
 
                 $orderService->transition(
                     $order,
                     $paidStateId,
-                    OrderHistoryType::SYSTEM(),
+                    OrderHistoryType::SYSTEM,
                     '付款成功',
                     true
                 );
@@ -287,7 +278,7 @@ class EcpayPayment extends AbstractPayment
                 $orderService->transition(
                     $order,
                     $failedStateId,
-                    OrderHistoryType::SYSTEM(),
+                    OrderHistoryType::SYSTEM,
                     $res['RtnMsg'] ?? '付款失敗',
                     false
                 );
@@ -298,7 +289,7 @@ class EcpayPayment extends AbstractPayment
             $orm->updateBatch(
                 Order::class,
                 compact('params'),
-                ['id' => $order->getId()]
+                ['id' => $order->id]
             );
 
             Logger::error('ecpay-payment-error', $no);
@@ -330,7 +321,7 @@ class EcpayPayment extends AbstractPayment
 
         $order = $orm->mustFindOne(Order::class, compact('no'));
 
-        $order->setPaymentInfo($app->input()->dump());
+        $order->paymentInfo = $app->input()->dump();
 
         $orm->updateOne(Order::class, $order);
 

@@ -48,10 +48,13 @@ use Windwalker\Form\Field\SpacerField;
 use Windwalker\Form\Field\TextField;
 use Windwalker\Form\Form;
 use Windwalker\ORM\ORM;
+use Windwalker\Stream\Stream;
 use Windwalker\Utilities\Cache\InstanceCacheTrait;
 use Windwalker\Utilities\Str;
 
 use function Windwalker\collect;
+use function Windwalker\response;
+use function Windwalker\uid;
 
 /**
  * The EcpayShipping class.
@@ -211,9 +214,9 @@ class EcpayShipping extends AbstractShipping implements
                 ->title($this->trans('shopgo.shipping.fieldset.layout'))
                 ->register(
                     function (Form $form) {
-                        $form->add('checkout_form_layout', TextField::class)
+                        $form->add('checkout_form_inject_id', TextField::class)
                             ->label($this->trans('shopgo.shipping.field.checkout.form.layout'))
-                            ->defaultValue('ecpay-shipping-form');
+                            ->defaultValue('shopgo.ecpay.shipping-form');
 
                         $form->add('orderinfo_layout', TextField::class)
                             ->label($this->trans('shopgo.shipping.field.orderinfo.layout'))
@@ -244,20 +247,30 @@ class EcpayShipping extends AbstractShipping implements
         return __DIR__ . '/../views';
     }
 
-    public function form(Location $location): string
+    public function form(Location $location): ?array
     {
-        $layout = $this->getParams()['checkout_form_layout'] ?? null ?: 'ecpay-shipping-form';
-
-        if (!$layout) {
-            return '';
+        if (!$this->isCVSType()) {
+            return null;
         }
 
-        return $this->renderLayout(
-            $layout,
-            [
-                'shipping' => $this,
+        $injectId = $this->getParams()['checkout_form_inject_id'] ?? null ?: 'shopgo.ecpay.shipping-form';
+
+        $nav = $this->app->retrieve(Navigator::class);
+
+        $uid = uid();
+        $mapRoute = $nav->to('shipping_task')
+            ->task('mapSelect')
+            ->var('callback', $callbackName = 'mapSelected_' . $uid)
+            ->id($this->getData()->id)
+            ->full();
+
+        return [
+            'injectId' => $injectId,
+            'props' => [
+                'mapRoute' => (string) $mapRoute,
+                'callback' => $callbackName,
             ]
-        );
+        ];
     }
 
     public function prepareOrder(Order $order, CartData $cartData, array $checkoutData = []): Order
@@ -266,7 +279,7 @@ class EcpayShipping extends AbstractShipping implements
         $shipping = $checkoutData['shipping'] ?? [];
 
         if ($this->isCVSType() && $shipping) {
-            $data = $order->getShippingData();
+            $data = $order->shippingData;
 
             $data['cvsAddress'] = $shipping['CVSAddress'] ?? '';
             $data['cvsOutSide'] = $shipping['CVSOutSide'] ?? '';
@@ -328,7 +341,7 @@ class EcpayShipping extends AbstractShipping implements
             // 請參考 example/Logistics/Domestic/GetMapResponse.php 範例開發
             'ServerReplyURL' => $reply = (string) $nav->to('shipping_task')
                 ->task('mapReply')
-                ->id($this->getData()->getId())
+                ->id($this->getData()->id)
                 ->var('callback', $callback)
                 ->full(),
 
@@ -371,9 +384,23 @@ HTML;
         return '1|OK';
     }
 
+    // public function checkoutForm(): mixed
+    // {
+    //     // $layout = $this->getParams()['checkout_form_layout'] ?? null ?: 'ecpay-shipping-form';
+    //     //
+    //     // if (!$layout) {
+    //     //     return '';
+    //     // }
+    //
+    //     // $body = Stream::fromString(file_get_contents(__DIR__ . '/../assets/dist/shipping-form.js'));
+    //
+    //     return response(file_get_contents(__DIR__ . '/../assets/dist/shipping-form.js'))
+    //         ->withAddedHeader('Content-Type', 'text/javascript');
+    // }
+
     public function createShipment(Order $order): void
     {
-        if ($order->getShippingNo()) {
+        if ($order->shippingNo) {
             return;
         }
 
@@ -383,9 +410,9 @@ HTML;
         $postService = $factory->create('PostWithCmvEncodedStrResponseService');
         $chronosService = $this->app->service(ChronosService::class);
 
-        Logger::info('ecpay-shipment-create', "Create Ecpay shipment for: {$order->getNo()}");
+        Logger::info('ecpay-shipment-create', "Create Ecpay shipment for: {$order->no}");
 
-        $no = $order->getNo();
+        $no = $order->no;
 
         if ($this->isTest()) {
             $no .= 'T' . OrderService::getCurrentTimeBase62();
@@ -393,18 +420,18 @@ HTML;
 
         $params = collect($this->getParams());
         $gateway = $params['gateway'];
-        $shippingData = $order->getShippingData();
+        $shippingData = $order->shippingData;
 
-        $name = $shippingData->getName();
+        $name = $shippingData->name;
         $name = Str::substring($name, 0, 10);
 
         // Shipping Info
-        $shippingInfo = $order->getShippingInfo();
-        $shippingInfo->setIsCod($this->isCod($order));
-        $shippingInfo->setTradeNo($no);
-        $shippingInfo->setTargetName($name);
-        $shippingInfo->setAmount((string) $order->getTotal());
-        $shippingInfo->setType($this->getSubtype());
+        $shippingInfo = $order->shippingInfo;
+        $shippingInfo->isCod = $this->isCod($order);
+        $shippingInfo->tradeNo = $no;
+        $shippingInfo->targetName = $name;
+        $shippingInfo->amount = (string) $order->total;
+        $shippingInfo->type = $this->getSubtype();
         // $shippingInfo->setTargetAddress($no);
 
         $input = [
@@ -413,18 +440,18 @@ HTML;
             'MerchantTradeDate' => $chronosService->toLocalFormat('now', 'Y/m/d H:i:s'),
             'LogisticsType' => $this->getLogisticType(),
             'LogisticsSubType' => $this->getSubtype(),
-            'GoodsAmount' => (int) $order->getTotal(),
+            'GoodsAmount' => (int) $order->total,
             'GoodsName' => $params['goods_name'] ?: '測試商品',
             'SenderName' => $params['sender_name'] ?: '測試人員',
             'SenderCellPhone' => $params['sender_cellphone'] ?: '0912345678',
-            'IsCollection' => $shippingInfo->isCod() ? 'Y' : 'N',
+            'IsCollection' => $shippingInfo->isCod ? 'Y' : 'N',
             'ReceiverName' => $name,
-            'ReceiverCellPhone' => $shippingData->getMobile() ?: $shippingData->getPhone(),
+            'ReceiverCellPhone' => $shippingData->mobile ?: $shippingData->phone,
 
             'ServerReplyURL' => (string) $nav->to('front::shipping_task')
                 ->task('notify')
-                ->id($this->getData()->getId()) // Shipping ID
-                ->var('order_id', $order->getId())
+                ->id($this->getData()->id) // Shipping ID
+                ->var('order_id', $order->id)
                 ->full(),
 
             // CVS
@@ -433,7 +460,7 @@ HTML;
             // Home
             'SenderZipCode' => $params['sender_zipcode'] ?? '',
             'SenderAddress' => $params['sender_address'] ?? '',
-            'ReceiverZipCode' => $shippingData->getPostcode(),
+            'ReceiverZipCode' => $shippingData->postcode,
             'ReceiverAddress' => AddressService::format($shippingData, static::TAIWAN_ADDRESS_FORMAT),
         ];
 
@@ -445,7 +472,7 @@ HTML;
         if (empty($res['RtnCode'])) {
             $msg = sprintf(
                 "建立物流單給 %s 時出現錯誤: %s",
-                $order->getNo(),
+                $order->no,
                 array_key_first($res)
             );
 
@@ -456,13 +483,13 @@ HTML;
         Logger::error('ecpay-shipment-create', 'Receive Data:');
         Logger::error('ecpay-shipment-create', print_r($res, true));
 
-        $order->setShippingNo($res['1|AllPayLogisticsID']);
-        $order->setShippingArgs($input);
-        $order->setShippingStatus($res['RtnMsg']);
+        $order->shippingNo = $res['1|AllPayLogisticsID'];
+        $order->shippingArgs = $input;
+        $order->shippingStatus = $res['RtnMsg'];
 
         $shippingData['cvsPaymentNo'] = $res['CVSPaymentNo'];
         $shippingData['cvsValidationNo'] = $res['CVSValidationNo'];
-        $shippingData['cvsPrice'] = (int) $order->getTotal();
+        $shippingData['cvsPrice'] = (int) $order->total;
 
         $this->orm->updateOne(Order::class, $order);
     }
@@ -476,7 +503,7 @@ HTML;
         if ($isCollection === 'listed') {
             return collect($params['cod_payments'] ?? [])
                 ->map('intval')
-                ->contains($order->getPaymentId());
+                ->contains($order->paymentId);
         }
 
         return (bool) $isCollection;
@@ -488,7 +515,7 @@ HTML;
 
         $postService = $factory->create('PostWithCmvVerifiedEncodedStrResponseService');
 
-        $ecpayShippingNo = $order->getShippingNo();
+        $ecpayShippingNo = $order->shippingNo;
 
         if (!$ecpayShippingNo) {
             return;
@@ -514,13 +541,13 @@ HTML;
     {
         $statusText = $this->getStatusText($status);
 
-        if ($statusText === $order->getShippingStatus()) {
+        if ($statusText === $order->shippingStatus) {
             return;
         }
 
         Logger::info(
             'ecpay-shipping-status',
-            "Update shipping status for: {$order->getNo()} => {$status}"
+            "Update shipping status for: {$order->no} => {$status}"
         );
 
         Logger::info(
@@ -528,16 +555,16 @@ HTML;
             print_r($res, true)
         );
 
-        $order->setShippingStatus($statusText);
-        $order->getShippingInfo()
-            ->setShipmentNo($shipmentNo ?? '')
-            ->setStatus((string) $status)
-            ->setStatusText($statusText);
-        $histories = $order->getShippingHistory();
-        $histories[] = (new ShippingHistory())
-            ->setTime('now')
-            ->setStatusText($statusText)
-            ->setStatusCode((string) $status);
+        $order->shippingStatus = $statusText;
+        $order->shippingInfo->shipmentNo = $shipmentNo ?? '';
+        $order->shippingInfo->status = (string) $status;
+        $order->shippingInfo->statusText = $statusText;
+        $histories = $order->shippingHistory;
+        $histories[] = (new ShippingHistory(
+            statusCode: (string) $status,
+            statusText: $statusText,
+            time: 'now'
+        ));
 
         $params = collect($this->getParams());
 
@@ -549,31 +576,31 @@ HTML;
             $orderService->transition(
                 $order,
                 (int) $params['received_state'],
-                OrderHistoryType::SYSTEM(),
+                OrderHistoryType::SYSTEM,
                 $statusText
             );
         } elseif ($this->isShippingStatus($this->getSubtype(), $status)) {
-            $order->setShippedAt('now');
+            $order->shippedAt = 'now';
             $this->orm->updateOne(Order::class, $order);
 
             $orderService->transition(
                 $order,
                 (int) $params['shipping_state'],
-                OrderHistoryType::SYSTEM(),
+                OrderHistoryType::SYSTEM,
                 $statusText
             );
         } elseif ($this->isDeliveredStatus($this->getSubtype(), $status)) {
             $orderService->transition(
                 $order,
                 (int) $params['delivered_state'],
-                OrderHistoryType::SYSTEM(),
+                OrderHistoryType::SYSTEM,
                 $statusText
             );
         } elseif ($this->isUnPickStatus($this->getSubtype(), $status)) {
             $orderService->transition(
                 $order,
                 (int) $params['unpick_state'],
-                OrderHistoryType::SYSTEM(),
+                OrderHistoryType::SYSTEM,
                 $statusText
             );
         }
@@ -618,7 +645,7 @@ HTML;
             'UNIMART', 'UNIMARTC2C' => $status === 2074,
             'FAMI', 'FAMIC2C' => $status === 3020,
             'HILIFE', 'HILIFEC2C' => $status === 2074 || $status === 3020,
-            'HILIFE', 'HILIFEC2C' => $status === 2074 || $status === 2078,
+            'OKMART', 'OKMARTC2C' => $status === 2074 || $status === 2078,
             default => false
         };
     }
@@ -671,15 +698,15 @@ HTML;
             ->create('AutoSubmitFormWithCmvService');
 
         foreach ($orders as $order) {
-            if (!$order->getShippingNo()) {
+            if (!$order->shippingNo) {
                 $this->createShipment($order);
             }
 
             // Re load order to fix ValueObject case issue
-            $order = $this->orm->mustFindOne(Order::class, $order->getId());
+            $order = $this->orm->mustFindOne(Order::class, $order->id);
 
-            $shippingData  = $order->getShippingData();
-            $logisticIds[] = $order->getShippingNo();
+            $shippingData  = $order->shippingData;
+            $logisticIds[] = $order->shippingNo;
 
             // Todo: Use camel after ValueObject issue fixed: https://github.com/windwalker-io/framework/issues/1046
             $paymentNos[] = $shippingData->cvsPaymentNo ?? $shippingData->CVSPaymentNo ?? '';
