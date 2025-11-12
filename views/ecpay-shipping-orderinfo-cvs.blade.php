@@ -43,7 +43,7 @@ $shippingInfo = $order->shippingInfo;
     </dt>
 
     <dd class="col-lg-9">
-        {{ $shippingData->cvsStoreName }}
+        {{ $shippingData->CvsStoreName }}
     </dd>
 
     <dt class="col-lg-3">
@@ -51,8 +51,8 @@ $shippingInfo = $order->shippingInfo;
     </dt>
 
     <dd class="col-lg-9">
-        <a href="https://www.google.com/maps/place/{{ $shippingData->cvsAddress }}" target="_blank">
-            {{ $shippingData->cvsAddress }}
+        <a href="https://www.google.com/maps/place/{{ $shippingData->CvsAddress }}" target="_blank">
+            {{ $shippingData->CvsAddress }}
             <i class="fa fa-external-link"></i>
         </a>
     </dd>
@@ -62,7 +62,7 @@ $shippingInfo = $order->shippingInfo;
     </dt>
 
     <dd class="col-lg-9">
-        {{ $shippingData->cvsStoreId }}
+        {{ $shippingData->CvsStoreId }}
     </dd>
 
     <dt class="col-lg-3">
@@ -70,6 +70,6 @@ $shippingInfo = $order->shippingInfo;
     </dt>
 
     <dd class="col-lg-9">
-        {{ $shippingInfo->getShipmentNo() ?: '-' }}
+        {{ $shippingInfo->shipmentNo ?: '-' }}
     </dd>
 </dl>
